@@ -1,0 +1,16 @@
+deploy:
+  - name: Deploy to Production
+    environment: production
+    steps:
+      - name: Clone repository
+        run: git clone https://github.com/CasDenteneer/devopsbunny.git
+
+      - name: Build application
+        run: |
+          docker compose up -d
+
+  - name: Deploy to Staging
+    environment: staging
+    steps:
+      - name: Clone repository
+        run: git clone
