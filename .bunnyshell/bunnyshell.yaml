@@ -1,16 +1,36 @@
-deploy:
-  - name: Deploy to Production
-    environment: production
-    steps:
-      - name: Clone repository
-        run: git clone https://github.com/CasDenteneer/devopsbunny.git
-
-      - name: Build application
-        run: |
-          docker compose up -d
-
-  - name: Deploy to Staging
-    environment: staging
-    steps:
-      - name: Clone repository
-        run: git clone
+kind: Environment
+name: preview
+type: primary
+urlHandle: andereurl
+components:
+    -
+        kind: Database
+        name: db-exporter
+        dockerCompose:
+            environment:
+                MONGODB_URI: 'mongodb://mongo:27017'
+            image: 'bitnami/mongodb-exporter:latest'
+            ports:
+                - '9216:9216'
+    -
+        kind: Application
+        name: frontend
+        gitRepo: 'https://github.com/CasDenteneer/devopsbunny.git'
+        gitBranch: production
+        gitApplicationPath: frontend
+        dockerCompose:
+            build:
+                context: ./frontend
+                dockerfile: DockerFile
+            environment:
+                API_URL: 'http://localhost:3000'
+                NODE_ENV: production
+            ports:
+                - '80:80'
+        hosts:
+            -
+                hostname: 'frontend-{{ env.base_domain }}'
+                path: /
+                servicePort: 80
+    -
+        kind: Database
