@@ -162,6 +162,20 @@ services:
       - ./prometheus:/etc/prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
 
+  frontend:
+    image: frontend
+    build:
+      context: frontend
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      API_URL: http://localhost:3000
+    ports:
+      - 80:80
+    restart: on-failure
+    networks:
+      - net
+
   # grafana:
   #   build:
   #     dockerfile: ./grafana/Dockerfile
