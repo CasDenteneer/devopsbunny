@@ -1,0 +1,193 @@
+version: '3.4'
+
+services:
+
+  rabbitmq:
+    container_name: webs_messagebus
+    build:
+      dockerfile: ./RabbitMQ/Dockerfile
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - net
+    healthcheck:
+      test: curl -sS http://localhost:15672 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+    #mongoose db 
+  mongo:
+    container_name: webs_mongo
+    image: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ~/.docker-conf/mongo/data/:/data/db
+      - ~/.docker-conf/mongo/log/:/var/log/mongodb
+    networks:
+      - net
+    healthcheck:
+      test: curl -sS http://localhost:27017 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  gateway:
+    image: gateway
+    build:
+      context: gateway
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      SECRET_KEY: secret
+      REGISTER_API_KEY: register
+      REGISTER_SERVICE_URL: http://localhost:6000
+      TARGET_API_KEY: target
+      TARGET_SERVICE_URL: http://localhost:8080
+      DB_URL: mongodb://mongo:27017/authservice
+      BROKER_URL: amqp://rabbitmq:5672
+    ports:
+      - 3000:3000
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: on-failure
+    networks:
+      - net
+
+  mail:
+    image: mail
+    build:
+      context: mail
+      dockerfile: ./Dockerfile
+    environment:
+      PORT: 5000
+      SMTP_HOST: your_smtp_host
+      SMTP_PORT: your_smtp_port
+      SMTP_USER: your_smtp_username
+      SMTP_PASS: your_smtp_password
+      DB_URL: mongodb://mongo:27017/mailservice
+      BROKER_URL: amqp://rabbitmq:5672
+
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: on-failure
+    networks:
+      - net
+
+  clock:
+    image: clock
+    build:
+      context: clock
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      BROKER_URL: amqp://rabbitmq:5672
+    ports:
+      - 3001:3001
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: on-failure
+    networks:
+      - net
+
+  register:
+    image: register
+    build:
+      context: register
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      API_KEY: register
+      DB_URL: mongodb://mongo:27017/websusers
+      BROKER_URL: amqp://rabbitmq:5672
+    ports:
+      - 6000:6000
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: on-failure
+    networks:
+      - net
+
+  score:
+    image: score
+    build:
+      context: score
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      LISTEN_TO: target.score.requested
+      PUBLISH_TO: target.score.calculated
+      DB_URL: mongodb://mongo:27017/scoreservice
+      BROKER_URL: amqp://rabbitmq:5672
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: on-failure
+    networks:
+      - net
+
+  target:
+    image: target
+    build:
+      context: target
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      API_KEY: target
+      DB_URL: mongodb://mongo:27017/targets
+      BROKER_URL: amqp://rabbitmq:5672
+    ports:
+      - 8080:8080
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: on-failure
+    networks:
+      - net
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  # grafana:
+  #   build:
+  #     dockerfile: ./grafana/Dockerfile
+  #   ports:
+  #     - "3003:3003"
+  #   volumes:
+  #     - ./grafana/provisioning:/etc/grafana/provisioning
+  #     - ./grafana/config.ini:/etc/grafana/config.ini
+  #     - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+  db-exporter:
+    image: bitnami/mongodb-exporter:latest
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017  
+    ports:
+      - "9216:9216"  
+    depends_on:
+      - mongo
+          
+networks:
+  net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1
+  
+
+      

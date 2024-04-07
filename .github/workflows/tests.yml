@@ -1,0 +1,45 @@
+name: Jest Code Coverage API
+on:
+  push:
+    paths:
+      - 'api/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  jest_code_coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'  # Update to Node.js version 16
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./Week1/
+
+      - name: Run tests and collect coverage
+        run: npm test -- --coverage
+        working-directory: ./Week1/
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v2
+        with:
+          name: coverage-report
+          path: ./Week1/coverage
+
+      - name: Check code coverage thresholds
+        run: |
+          coverage=$(cat ./Week1/coverage/lcov.info | grep "lines" | awk '{print $3}' | cut -d'%' -f1)
+          if [ "$coverage" -lt 80 ]; then
+            echo "Code coverage is below threshold ($coverage%), failing the build."
+            exit 1
+          else
+            echo "Code coverage is acceptable ($coverage%)."
+          fi
